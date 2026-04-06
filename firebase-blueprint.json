@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile",
+      "description": "Stores user profile information and roles.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "vendor", "customer"] },
+        "phoneNumber": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "menuItems": {
+      "title": "Menu Item",
+      "description": "A food item available for ordering.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "vendorId": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "category": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "available": { "type": "boolean" }
+      },
+      "required": ["name", "price", "vendorId"]
+    },
+    "orders": {
+      "title": "Order",
+      "description": "A customer order for food items.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "vendorId": { "type": "string" },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "preparing", "ready", "delivered", "cancelled"] },
+        "deliveryMethod": { "type": "string", "enum": ["pickup", "delivery"] },
+        "paymentMethod": { "type": "string", "enum": ["cash", "momo"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerId", "vendorId", "items", "totalAmount", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "users",
+      "description": "User profile document."
+    },
+    "/menuItems/{itemId}": {
+      "schema": "menuItems",
+      "description": "Menu item document."
+    },
+    "/orders/{orderId}": {
+      "schema": "orders",
+      "description": "Customer order document."
+    }
+  }
+}
