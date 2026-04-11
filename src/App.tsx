@@ -59,6 +59,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'react-hot-toast';
+import { usePaystackPayment } from 'react-paystack';
 
 // --- Contexts ---
 interface AuthContextType {
@@ -119,6 +120,62 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 // --- Components ---
+
+const OrderTracker = ({ status }: { status: OrderStatus }) => {
+  const steps: { key: OrderStatus; label: string; icon: any }[] = [
+    { key: 'pending', label: 'Placed', icon: Clock },
+    { key: 'preparing', label: 'Preparing', icon: Utensils },
+    { key: 'ready', label: 'Ready', icon: ShoppingBag },
+    { key: 'delivered', label: 'Delivered', icon: CheckCircle },
+  ];
+
+  if (status === 'cancelled') {
+    return (
+      <div className="bg-red-50 p-4 rounded-2xl flex items-center gap-3 text-red-600">
+        <X className="h-5 w-5" />
+        <span className="font-bold text-sm uppercase tracking-wider">Order Cancelled</span>
+      </div>
+    );
+  }
+
+  const currentStepIndex = steps.findIndex(s => s.key === status);
+
+  return (
+    <div className="relative pt-8 pb-4">
+      <div className="absolute top-12 left-0 w-full h-1 bg-gray-100 rounded-full"></div>
+      <div 
+        className="absolute top-12 left-0 h-1 bg-orange-500 rounded-full transition-all duration-1000"
+        style={{ width: `${(currentStepIndex / (steps.length - 1)) * 100}%` }}
+      ></div>
+      
+      <div className="relative flex justify-between">
+        {steps.map((step, idx) => {
+          const isCompleted = idx <= currentStepIndex;
+          const isActive = idx === currentStepIndex;
+          const Icon = step.icon;
+
+          return (
+            <div key={step.key} className="flex flex-col items-center gap-2">
+              <div className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 z-10",
+                isCompleted ? "bg-orange-500 text-white shadow-lg shadow-orange-200" : "bg-white text-gray-300 border-2 border-gray-100",
+                isActive && "ring-4 ring-orange-100 scale-110"
+              )}>
+                <Icon className="h-5 w-5" />
+              </div>
+              <span className={cn(
+                "text-[10px] font-black uppercase tracking-tighter",
+                isCompleted ? "text-orange-600" : "text-gray-300"
+              )}>
+                {step.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 const Navbar = () => {
   const { user, profile, logout } = useAuth();
@@ -1029,8 +1086,31 @@ const MenuPage = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<{item: MenuItem, quantity: number}[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'momo'>('momo');
+  const [isProcessing, setIsProcessing] = useState(false);
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  const totalAmount = cart.reduce((sum, i) => sum + (i.item.price * i.quantity), 0);
+
+  const paystackConfig = React.useMemo(() => ({
+    reference: (new Date()).getTime().toString(),
+    email: user?.email || '',
+    amount: Math.round(totalAmount * 100), // Amount in pesewas
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
+    currency: 'GHS',
+    metadata: {
+      custom_fields: [
+        {
+          display_name: "Customer Name",
+          variable_name: "customer_name",
+          value: profile?.displayName || ""
+        }
+      ]
+    }
+  }), [user?.email, totalAmount, profile?.displayName]);
+
+  const initializePayment = usePaystackPayment(paystackConfig);
 
   useEffect(() => {
     const q = query(collection(db, 'menuItems'), where('available', '==', true));
@@ -1059,14 +1139,15 @@ const MenuPage = () => {
     toast.success(`Added ${item.name} to cart`);
   };
 
-  const totalAmount = cart.reduce((sum, i) => sum + (i.item.price * i.quantity), 0);
-
-  const placeOrder = async () => {
+  const placeOrder = async (isPaid: boolean = false) => {
     if (!user) {
       navigate('/login');
       return;
     }
 
+    if (cart.length === 0) return;
+
+    setIsProcessing(true);
     try {
       const orderData = {
         customerId: user.uid,
@@ -1080,18 +1161,73 @@ const MenuPage = () => {
         totalAmount,
         status: 'pending',
         deliveryMethod: 'delivery',
-        paymentMethod: 'momo',
-        paymentStatus: 'pending',
+        paymentMethod,
+        paymentStatus: isPaid ? 'paid' : 'pending',
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
 
       await addDoc(collection(db, 'orders'), orderData);
-      toast.success('Order placed successfully!');
+      toast.success(isPaid ? 'Payment successful & Order placed!' : 'Order placed successfully!');
       setCart([]);
       navigate('/orders');
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, 'orders');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleCheckout = () => {
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
+    if (cart.length === 0) {
+      toast.error('Your cart is empty');
+      return;
+    }
+
+    if (paymentMethod === 'momo') {
+      const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
+      if (!publicKey) {
+        toast.error('Paystack Public Key is missing. Please add VITE_PAYSTACK_PUBLIC_KEY to your environment variables in Settings.');
+        console.error('MoMo Error: VITE_PAYSTACK_PUBLIC_KEY is not defined');
+        return;
+      }
+
+      if (publicKey.startsWith('sk_')) {
+        toast.error("You are using a SECRET key. Please use your PUBLIC key (starts with pk_). Check your Paystack settings.");
+        console.error('MoMo Error: VITE_PAYSTACK_PUBLIC_KEY starts with sk_ (Secret Key)');
+        return;
+      }
+
+      console.log('Initializing MoMo payment...', { 
+        amount: paystackConfig.amount, 
+        email: paystackConfig.email,
+        ref: paystackConfig.reference 
+      });
+
+      const onSuccess = (reference: any) => {
+        console.log('Payment successful. Reference:', reference);
+        placeOrder(true);
+      };
+
+      const onClose = () => {
+        console.log('Payment window closed by user');
+        toast.error('Payment cancelled');
+      };
+
+      try {
+        // Correct usage for this version of react-paystack
+        initializePayment({ onSuccess, onClose });
+      } catch (err) {
+        console.error('Paystack Initialization Error:', err);
+        toast.error('Could not open payment window. Please check your internet connection or try again.');
+      }
+    } else {
+      placeOrder(false);
     }
   };
 
@@ -1168,25 +1304,61 @@ const MenuPage = () => {
                   ))}
                 </div>
                 
-                <div className="border-t border-gray-100 pt-6 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500 font-medium">Subtotal</span>
-                    <span className="text-gray-900 font-bold">GH₵{(totalAmount ?? 0).toFixed(2)}</span>
+                <div className="border-t border-gray-100 pt-6 space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-500 font-medium">Subtotal</span>
+                      <span className="text-gray-900 font-bold">GH₵{(totalAmount ?? 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+                      <span className="text-xl font-black text-gray-900">Total</span>
+                      <span className="text-2xl font-black text-orange-500">GH₵{(totalAmount ?? 0).toFixed(2)}</span>
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500 font-medium">Delivery</span>
-                    <span className="text-green-600 font-bold">Calculated at checkout</span>
-                  </div>
-                  <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-                    <span className="text-xl font-black text-gray-900">Total</span>
-                    <span className="text-2xl font-black text-orange-500">GH₵{(totalAmount ?? 0).toFixed(2)}</span>
+
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setPaymentMethod('momo')}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                          paymentMethod === 'momo' 
+                            ? "border-orange-500 bg-orange-50 text-orange-600" 
+                            : "border-gray-100 text-gray-400 hover:border-gray-200"
+                        )}
+                      >
+                        <CreditCard className="h-4 w-4" />
+                        <span className="text-[9px] font-black uppercase">Mobile Money</span>
+                      </button>
+                      <button
+                        onClick={() => setPaymentMethod('cash')}
+                        className={cn(
+                          "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                          paymentMethod === 'cash' 
+                            ? "border-orange-500 bg-orange-50 text-orange-600" 
+                            : "border-gray-100 text-gray-400 hover:border-gray-200"
+                        )}
+                      >
+                        <Utensils className="h-4 w-4" />
+                        <span className="text-[9px] font-black uppercase">Cash</span>
+                      </button>
+                    </div>
                   </div>
                   
                   <button 
-                    onClick={placeOrder}
-                    className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 mt-6"
+                    onClick={handleCheckout}
+                    disabled={isProcessing}
+                    className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold text-lg hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    Checkout
+                    {isProcessing ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <>
+                        {paymentMethod === 'momo' ? 'Pay & Place Order' : 'Place Order'}
+                        <ChevronRight className="h-5 w-5" />
+                      </>
+                    )}
                   </button>
                 </div>
               </>
@@ -1203,6 +1375,7 @@ const OrdersPage = () => {
   const [loading, setLoading] = useState(true);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { user, loading: authLoading } = useAuth();
+  const prevOrdersRef = React.useRef<Record<string, OrderStatus>>({});
 
   useEffect(() => {
     if (!user || authLoading) return;
@@ -1215,6 +1388,34 @@ const OrdersPage = () => {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      
+      // Notification Logic
+      items.forEach(order => {
+        const prevStatus = prevOrdersRef.current[order.id];
+        if (prevStatus && prevStatus !== order.status) {
+          const statusMessages: Record<string, string> = {
+            preparing: "👨‍🍳 Your order is now being prepared!",
+            ready: "🥡 Your order is ready for pickup/delivery!",
+            delivered: "✅ Your order has been delivered! Enjoy your meal!",
+            cancelled: "❌ Your order has been cancelled."
+          };
+          
+          if (statusMessages[order.status]) {
+            toast(statusMessages[order.status], {
+              icon: '🔔',
+              duration: 5000,
+              style: {
+                borderRadius: '1rem',
+                background: '#333',
+                color: '#fff',
+                fontWeight: 'bold'
+              }
+            });
+          }
+        }
+        prevOrdersRef.current[order.id] = order.status;
+      });
+
       setOrders(items);
       setLoading(false);
     }, (error) => {
@@ -1335,6 +1536,10 @@ const OrdersPage = () => {
                   {order.status}
                 </div>
               </div>
+
+              <div className="mb-8">
+                <OrderTracker status={order.status} />
+              </div>
               
               <div className="space-y-3 mb-6">
                 {order.items.map((item, idx) => (
@@ -1350,6 +1555,12 @@ const OrdersPage = () => {
                   <div className="flex items-center gap-2 text-gray-500 text-sm">
                     <CreditCard className="h-4 w-4" />
                     <span>Paid via {order.paymentMethod.toUpperCase()}</span>
+                    <span className={cn(
+                      "px-2 py-0.5 rounded-full text-[10px] font-black uppercase",
+                      order.paymentStatus === 'paid' ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                    )}>
+                      {order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                    </span>
                   </div>
                   {order.status === 'pending' && (
                     <button 
@@ -1552,6 +1763,12 @@ const VendorPortal = () => {
                       order.status === 'cancelled' ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"
                     )}>
                       {order.status}
+                    </span>
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[10px] font-black uppercase",
+                      order.paymentStatus === 'paid' ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                    )}>
+                      {order.paymentStatus === 'paid' ? 'Paid via MoMo' : 'Unpaid (Cash)'}
                     </span>
                     <span className="text-gray-400 text-sm">#{order.id.slice(0, 8)}</span>
                   </div>

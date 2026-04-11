@@ -2,15 +2,15 @@ import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 const firebaseConfig = {
-  projectId: "gen-lang-client-0901244350",
-  appId: "1:624370272180:web:4b9e8a0ca8a2e54e0b54e1",
-  apiKey: "AIzaSyAlbNGpNE_ApUZW2Jqal1O_BbBneh0Za5g",
-  authDomain: "gen-lang-client-0901244350.firebaseapp.com",
-  storageBucket: "gen-lang-client-0901244350.firebasestorage.app",
-  messagingSenderId: "624370272180"
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID
 };
 
-const FIRESTORE_DB_ID = "ai-studio-fff57684-98ae-4bbd-87cc-1c68ba9843e6";
+const FIRESTORE_DB_ID = import.meta.env.VITE_FIRESTORE_DATABASE_ID;
 
 console.log('[DEBUG] Initializing Firebase with Project ID:', firebaseConfig.projectId);
 const app = initializeApp(firebaseConfig);
