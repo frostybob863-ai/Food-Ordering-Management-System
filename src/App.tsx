@@ -12,7 +12,10 @@ import {
   signOut, 
   User,
   signInWithEmailAndPassword,
-  createUserWithEmailAndPassword
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  confirmPasswordReset,
+  verifyPasswordResetCode
 } from 'firebase/auth';
 import { 
   doc, 
@@ -65,6 +68,7 @@ interface AuthContextType {
   signIn: () => Promise<void>;
   signInEmail: (email: string, pass: string) => Promise<void>;
   signUpEmail: (email: string, pass: string, name: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -333,7 +337,23 @@ const LoginPage = () => {
             <Utensils className="h-8 w-8 text-white" />
           </div>
           <h2 className="text-3xl font-black text-gray-900 mb-2">Welcome Back</h2>
-          <p className="text-gray-500">Sign in to your account</p>
+          <p className="text-gray-500">Choose your preferred login method</p>
+        </div>
+
+        {/* Primary Method: Google */}
+        <button 
+          onClick={signIn}
+          className="w-full bg-white border-2 border-gray-100 py-4 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 hover:border-orange-200 transition-all flex items-center justify-center gap-3 shadow-sm mb-6"
+        >
+          <div className="bg-white p-1 rounded-full border border-gray-100 flex items-center justify-center">
+            <img src="https://www.gstatic.com/images/branding/product/1x/googleg_48dp.png" className="h-5 w-5" alt="Google" />
+          </div>
+          Continue with Google
+        </button>
+
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+          <div className="relative flex justify-center text-[10px] uppercase tracking-widest"><span className="bg-white px-4 text-gray-400 font-bold">Or use email</span></div>
         </div>
 
         <form onSubmit={handleEmailLogin} className="space-y-4 mb-8">
@@ -349,7 +369,10 @@ const LoginPage = () => {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">Password</label>
+            <div className="flex justify-between items-center">
+              <label className="text-sm font-bold text-gray-700">Password</label>
+              <Link to="/forgot-password" id="forgot-password-link" className="text-xs font-bold text-orange-500 hover:underline">Forgot Password?</Link>
+            </div>
             <input 
               required
               type="password" 
@@ -364,30 +387,408 @@ const LoginPage = () => {
             type="submit"
             className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 disabled:opacity-50"
           >
-            {authLoading ? 'Signing in...' : 'Sign In'}
+            {authLoading ? 'Signing in...' : 'Sign In with Email'}
           </button>
         </form>
-
-        <div className="relative mb-8">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
-          <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-4 text-gray-400 font-bold">Or continue with</span></div>
-        </div>
         
-        <button 
-          onClick={signIn}
-          className="w-full bg-white border-2 border-gray-100 py-4 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all flex items-center justify-center gap-3 shadow-sm"
-        >
-          <div className="bg-white p-1 rounded-full border border-gray-100 flex items-center justify-center">
-            <img src="https://www.gstatic.com/images/branding/product/1x/googleg_48dp.png" className="h-5 w-5" alt="Google" />
-          </div>
-          Google
-        </button>
-        
-        <div className="mt-8 pt-8 border-t border-gray-100 text-center">
+        <div className="mt-8 pt-8 border-t border-gray-100 text-center space-y-4">
           <p className="text-sm text-gray-500">
             New to Miracle Bite's? <Link to="/signup" className="text-orange-500 font-bold hover:underline">Create an account</Link>
           </p>
+          
+          <div className="pt-4">
+            <p className="text-xs text-gray-400 mb-3">Having trouble logging in?</p>
+            <a 
+              href="https://wa.me/233240084440" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-green-600 font-bold hover:text-green-700 transition-all text-sm"
+            >
+              <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" className="h-4 w-4" alt="WhatsApp" />
+              Chat with Support
+            </a>
+          </div>
         </div>
+
+        {/* Admin Debug Section */}
+        {email === 'eotu907@gmail.com' && (
+          <div className="mt-8 p-4 bg-gray-50 rounded-2xl border border-gray-100 text-[10px] font-mono text-gray-400 overflow-hidden">
+            <p className="font-bold mb-1 text-gray-500 uppercase">Admin Debug Info</p>
+            <p>Auth Domain: {auth.app.options.authDomain}</p>
+            <p>API Key: {auth.app.options.apiKey ? 'Present' : 'Missing'}</p>
+            <p>Origin: {window.location.origin}</p>
+            <p>Ready: {auth.currentUser ? 'Auth Active' : 'No User'}</p>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+};
+
+const ForgotPasswordPage = () => {
+  const { resetPassword, signIn } = useAuth();
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('[DEBUG] ForgotPasswordPage handleSubmit called for:', email);
+    setLoading(true);
+    setError(null);
+    try {
+      await resetPassword(email);
+      console.log('[DEBUG] resetPassword call succeeded');
+      setSent(true);
+      toast.success('Reset link sent to your email');
+    } catch (err: any) {
+      console.error('[DEBUG] resetPassword call failed:', err);
+      setError(err.code || err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDefaultReset = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Direct call to Firebase without custom redirect settings
+      await sendPasswordResetEmail(auth, email);
+      setSent(true);
+      toast.success('Reset link sent (Default Flow)');
+    } catch (err: any) {
+      setError(`Default flow failed: ${err.code}`);
+      toast.error(`Failed: ${err.code}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-md w-full bg-white p-10 rounded-[2.5rem] shadow-2xl border border-gray-50"
+      >
+        <div className="text-center mb-8">
+          <div className="bg-orange-500 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-200">
+            <Settings className="h-8 w-8 text-white" />
+          </div>
+          <h2 className="text-3xl font-black text-gray-900 mb-2">Account Recovery</h2>
+          <p className="text-gray-500">Choose the easiest way to get back in.</p>
+        </div>
+
+        {/* Option 1: Google Recovery (Most Reliable) */}
+        <div className="mb-8 p-6 bg-orange-50 rounded-3xl border border-orange-100">
+          <p className="text-orange-900 font-bold text-sm mb-4 flex items-center gap-2">
+            <CheckCircle className="h-4 w-4 text-orange-500" /> Recommended Method
+          </p>
+          <p className="text-orange-700 text-xs mb-4">
+            If you have a Google account, you can skip passwords entirely.
+          </p>
+          <button 
+            onClick={signIn}
+            className="w-full bg-white border-2 border-orange-200 py-3 rounded-xl font-bold text-orange-600 hover:bg-orange-100 transition-all flex items-center justify-center gap-2 text-sm"
+          >
+            <img src="https://www.gstatic.com/images/branding/product/1x/googleg_48dp.png" className="h-4 w-4" alt="Google" />
+            Sign in with Google
+          </button>
+        </div>
+
+        <div className="relative mb-8">
+          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-100"></div></div>
+          <div className="relative flex justify-center text-[10px] uppercase tracking-widest"><span className="bg-white px-4 text-gray-400 font-bold">Or Email Reset</span></div>
+        </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-medium">
+            <p className="mb-2">Error: {error}</p>
+            <button 
+              onClick={handleDefaultReset}
+              className="w-full bg-red-600 text-white py-2 rounded-xl hover:bg-red-700 transition-all font-bold"
+            >
+              Try Emergency Reset Link
+            </button>
+          </div>
+        )}
+
+        {sent ? (
+          <div className="text-center space-y-6">
+            <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+              <p className="text-green-700 font-bold mb-2">Email Sent!</p>
+              <p className="text-green-600 text-xs">
+                Check your inbox for the reset link.
+              </p>
+            </div>
+            
+            <div className="pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-400 mb-4">Link not working? Use the manual code.</p>
+              <Link 
+                to="/reset-password" 
+                className="inline-flex items-center gap-2 text-sm font-bold text-orange-500 hover:text-orange-600 transition-all"
+              >
+                Enter Code Manually <ChevronRight className="h-4 w-4" />
+              </Link>
+            </div>
+
+            <button 
+              onClick={() => setSent(false)}
+              className="text-sm font-bold text-gray-500 hover:text-orange-500"
+            >
+              Try another email
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">Email Address</label>
+              <input 
+                required
+                type="email" 
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 outline-none"
+                placeholder="name@example.com"
+              />
+            </div>
+            <button 
+              disabled={loading}
+              type="submit"
+              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 disabled:opacity-50"
+            >
+              {loading ? 'Sending...' : 'Send Reset Link'}
+            </button>
+            <div className="text-center">
+              <Link to="/login" className="text-sm font-bold text-gray-500 hover:text-orange-500">
+                Wait, I remember my password!
+              </Link>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-8 pt-8 border-t border-gray-100 text-center">
+          <p className="text-xs text-gray-500 mb-4">Still having trouble?</p>
+          <a 
+            href="https://wa.me/233240084440" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 bg-green-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-green-600 transition-all shadow-lg shadow-green-100 text-sm"
+          >
+            <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" className="h-5 w-5 invert brightness-0" alt="WhatsApp" />
+            Chat with Support
+          </a>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const ResetPasswordPage = () => {
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [manualCode, setManualCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<'verifying' | 'ready' | 'success' | 'error' | 'manual'>('verifying');
+  const [errorMessage, setErrorMessage] = useState('');
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const queryParams = new URLSearchParams(location.search);
+  const urlCode = queryParams.get('oobCode');
+  const activeCode = urlCode || manualCode;
+
+  useEffect(() => {
+    if (!urlCode) {
+      setStatus('manual');
+      return;
+    }
+
+    const verifyCode = async () => {
+      try {
+        await verifyPasswordResetCode(auth, urlCode);
+        setStatus('ready');
+      } catch (error: any) {
+        console.error('Verify Reset Code Error:', error);
+        setStatus('error');
+        setErrorMessage(error.message || 'The reset link is invalid or has expired.');
+      }
+    };
+
+    verifyCode();
+  }, [urlCode]);
+
+  const handleManualVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualCode) return;
+    
+    setLoading(true);
+    try {
+      await verifyPasswordResetCode(auth, manualCode);
+      setStatus('ready');
+      toast.success('Code verified successfully');
+    } catch (error: any) {
+      console.error('Manual Verify Error:', error);
+      toast.error(error.message || 'Invalid or expired code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword !== confirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await confirmPasswordReset(auth, activeCode, newPassword);
+      setStatus('success');
+      toast.success('Password reset successfully');
+    } catch (error: any) {
+      console.error('Confirm Reset Error:', error);
+      toast.error(error.message || 'Failed to reset password');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-md w-full bg-white p-10 rounded-[2.5rem] shadow-2xl border border-gray-50"
+      >
+        <div className="text-center mb-8">
+          <div className="bg-orange-500 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg shadow-orange-200">
+            <Settings className="h-8 w-8 text-white" />
+          </div>
+          <h2 className="text-3xl font-black text-gray-900 mb-2">New Password</h2>
+          <p className="text-gray-500">Create a secure password for your account.</p>
+          <p className="text-[10px] text-gray-300 mt-2">v1.2.5-manual-entry</p>
+        </div>
+
+        {status === 'verifying' && (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
+            <p className="text-gray-500">Verifying reset link...</p>
+          </div>
+        )}
+
+        {status === 'manual' && (
+          <form onSubmit={handleManualVerify} className="space-y-6">
+            <div className="bg-orange-50 p-6 rounded-2xl border border-orange-100 mb-6">
+              <p className="text-orange-800 text-sm font-medium mb-2">
+                If the email link didn't work, follow these steps:
+              </p>
+              <ol className="text-orange-700 text-xs space-y-1 list-decimal ml-4">
+                <li>Right-click the "Reset Password" button in your email.</li>
+                <li>Select "Copy Link Address".</li>
+                <li>Look for the part that says <strong>oobCode=</strong> in that link.</li>
+                <li>Copy the long string of characters after it and paste it below.</li>
+              </ol>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">Recovery Code</label>
+              <input 
+                required
+                type="text" 
+                value={manualCode}
+                onChange={e => setManualCode(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 outline-none font-mono text-sm"
+                placeholder="Paste code here..."
+              />
+            </div>
+            <button 
+              disabled={loading || !manualCode}
+              type="submit"
+              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 disabled:opacity-50"
+            >
+              {loading ? 'Verifying...' : 'Verify Code'}
+            </button>
+            <Link to="/forgot-password" className="block text-center text-sm font-bold text-gray-500 hover:text-orange-500">
+              Request a new code
+            </Link>
+          </form>
+        )}
+
+        {status === 'error' && (
+          <div className="text-center space-y-6">
+            <div className="bg-red-50 p-6 rounded-2xl border border-red-100">
+              <p className="text-red-700 font-medium mb-2">{errorMessage}</p>
+              <p className="text-red-600 text-xs">The code might be expired or already used.</p>
+            </div>
+            <button 
+              onClick={() => setStatus('manual')}
+              className="w-full bg-white border-2 border-gray-100 py-4 rounded-2xl font-bold text-gray-700 hover:bg-gray-50 transition-all"
+            >
+              Try entering code manually
+            </button>
+            <Link 
+              to="/forgot-password" 
+              className="block w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 text-center"
+            >
+              Request New Link
+            </Link>
+          </div>
+        )}
+
+        {status === 'success' && (
+          <div className="text-center space-y-6">
+            <div className="bg-green-50 p-6 rounded-2xl border border-green-100">
+              <p className="text-green-700 font-medium">Your password has been reset successfully!</p>
+            </div>
+            <Link 
+              to="/login" 
+              className="block w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 text-center"
+            >
+              Go to Login
+            </Link>
+          </div>
+        )}
+
+        {status === 'ready' && (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">New Password</label>
+              <input 
+                required
+                type="password" 
+                value={newPassword}
+                onChange={e => setNewPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 outline-none"
+                placeholder="••••••••"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700">Confirm Password</label>
+              <input 
+                required
+                type="password" 
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-orange-500 outline-none"
+                placeholder="••••••••"
+              />
+            </div>
+            <button 
+              disabled={loading}
+              type="submit"
+              className="w-full bg-orange-500 text-white py-4 rounded-2xl font-bold hover:bg-orange-600 transition-all shadow-xl shadow-orange-200 disabled:opacity-50"
+            >
+              {loading ? 'Updating...' : 'Update Password'}
+            </button>
+          </form>
+        )}
       </motion.div>
     </div>
   );
@@ -766,6 +1167,7 @@ const MenuPage = () => {
 const OrdersPage = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
@@ -802,13 +1204,71 @@ const OrdersPage = () => {
     }
   };
 
+  const clearHistory = async () => {
+    const ordersToClear = orders.filter(o => o.status === 'delivered' || o.status === 'cancelled');
+    if (ordersToClear.length === 0) {
+      toast.error('No completed or cancelled orders to clear');
+      setShowClearConfirm(false);
+      return;
+    }
+
+    try {
+      const deletePromises = ordersToClear.map(order => deleteDoc(doc(db, 'orders', order.id)));
+      await Promise.all(deletePromises);
+      toast.success('Order history cleared');
+      setShowClearConfirm(false);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, 'orders');
+    }
+  };
+
   if (authLoading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div></div>;
   if (!user) return <Navigate to="/login" />;
   if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div></div>;
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-12">
-      <h2 className="text-4xl font-black text-gray-900 mb-10">Order History</h2>
+      <div className="flex justify-between items-center mb-10">
+        <h2 className="text-4xl font-black text-gray-900">Order History</h2>
+        {orders.some(o => o.status === 'delivered' || o.status === 'cancelled') && (
+          <button 
+            onClick={() => setShowClearConfirm(true)}
+            className="flex items-center gap-2 text-sm font-bold text-gray-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" /> Clear History
+          </button>
+        )}
+      </div>
+
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white p-8 rounded-[2.5rem] max-w-sm w-full shadow-2xl text-center"
+          >
+            <div className="bg-red-50 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <Trash2 className="h-8 w-8 text-red-500" />
+            </div>
+            <h3 className="text-2xl font-black text-gray-900 mb-2">Clear History?</h3>
+            <p className="text-gray-500 mb-8">This will permanently remove all delivered and cancelled orders from your history.</p>
+            <div className="flex gap-4">
+              <button 
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-3 rounded-xl font-bold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={clearHistory}
+                className="flex-1 py-3 rounded-xl font-bold bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg shadow-red-100"
+              >
+                Clear All
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
       
       <div className="space-y-6">
         {orders.length === 0 ? (
@@ -1577,6 +2037,42 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     }
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      console.log(`[DEBUG] Attempting password reset for: ${email}`);
+      const apiKey = auth.app.options.apiKey;
+      console.log(`[DEBUG] API Key from Auth: ${apiKey ? 'PRESENT (' + apiKey.substring(0, 5) + '...)' : 'MISSING'}`);
+      
+      // Use dynamic origin to ensure it matches the current environment's allowlist
+      const actionCodeSettings = {
+        url: `${window.location.origin}/reset-password`,
+        handleCodeInApp: true,
+      };
+      
+      console.log(`[DEBUG] Using redirect URL: ${actionCodeSettings.url}`);
+      
+      await sendPasswordResetEmail(auth, email, actionCodeSettings);
+      console.log('[DEBUG] Password reset email request accepted by Firebase');
+    } catch (error: any) {
+      console.error('Firebase Password Reset Error:', error.code, error.message);
+      
+      let friendlyMessage = 'Failed to send reset email.';
+      
+      if (error.code === 'auth/user-not-found') {
+        friendlyMessage = 'No account found with this email address.';
+      } else if (error.code === 'auth/invalid-email') {
+        friendlyMessage = 'Please enter a valid email address.';
+      } else if (error.code === 'auth/too-many-requests') {
+        friendlyMessage = 'Too many requests. Please wait a moment.';
+      } else if (error.code === 'auth/unauthorized-continue-uri') {
+        friendlyMessage = 'Domain not authorized. Please try the manual code method below.';
+      }
+      
+      toast.error(`${friendlyMessage} (Error: ${error.code})`);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
@@ -1587,7 +2083,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signInEmail, signUpEmail, logout }}>
+    <AuthContext.Provider value={{ user, profile, loading, signIn, signInEmail, signUpEmail, resetPassword, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -1625,6 +2121,8 @@ export default function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignUpPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
               
               <Route path="/menu" element={

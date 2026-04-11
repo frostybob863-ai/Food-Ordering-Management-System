@@ -128,6 +128,7 @@ service cloud.firestore {
         isAdmin() ||
         isVendor()
       );
+      allow delete: if isAuthenticated() && isOwner(resource.data.customerId) && (resource.data.status == 'delivered' || resource.data.status == 'cancelled');
     }
   }
 }
