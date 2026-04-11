@@ -125,7 +125,26 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
+    <header className="sticky top-0 z-50">
+      {!user && (
+        <motion.div 
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="bg-gradient-to-r from-orange-600 to-orange-500 text-white py-2.5 px-4 text-center text-[10px] sm:text-xs font-black tracking-widest uppercase shadow-sm relative overflow-hidden"
+        >
+          <div className="absolute inset-0 opacity-10 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent"></div>
+          <span className="relative z-10 flex items-center justify-center gap-2">
+            <span className="animate-pulse">✨</span>
+            Welcome to Miracle Bite's! 
+            <Link to="/login" className="bg-white/20 px-2 py-0.5 rounded hover:bg-white/30 transition-all">Sign in</Link> 
+            or 
+            <Link to="/signup" className="bg-white/20 px-2 py-0.5 rounded hover:bg-white/30 transition-all">Create account</Link> 
+            to start ordering!
+            <span className="animate-pulse">✨</span>
+          </span>
+        </motion.div>
+      )}
+      <nav className="bg-white border-b border-gray-100 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
@@ -222,6 +241,7 @@ const Navbar = () => {
         )}
       </AnimatePresence>
     </nav>
+    </header>
   );
 };
 
@@ -417,6 +437,7 @@ const LoginPage = () => {
             <p>Auth Domain: {auth.app.options.authDomain}</p>
             <p>API Key: {auth.app.options.apiKey ? 'Present' : 'Missing'}</p>
             <p>Origin: {window.location.origin}</p>
+            <p>Hostname: {window.location.hostname}</p>
             <p>Ready: {auth.currentUser ? 'Auth Active' : 'No User'}</p>
           </div>
         )}
@@ -897,10 +918,23 @@ const SignUpPage = () => {
           Google
         </button>
         
-        <div className="mt-8 pt-8 border-t border-gray-100 text-center">
+        <div className="mt-8 pt-8 border-t border-gray-100 text-center space-y-4">
           <p className="text-sm text-gray-500">
             Already have an account? <Link to="/login" className="text-orange-500 font-bold hover:underline">Sign in</Link>
           </p>
+          
+          <div className="pt-4">
+            <p className="text-xs text-gray-400 mb-3">Need help with your account?</p>
+            <a 
+              href="https://wa.me/233240084440" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-green-600 font-bold hover:text-green-700 transition-all text-sm"
+            >
+              <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" className="h-4 w-4" alt="WhatsApp" />
+              Chat with Support
+            </a>
+          </div>
         </div>
       </motion.div>
     </div>
@@ -2006,9 +2040,13 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     } catch (error: any) {
       if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
         console.log('Sign-in popup closed or cancelled');
+      } else if (error.code === 'auth/unauthorized-domain') {
+        const domain = window.location.hostname;
+        console.error(`[AUTH ERROR] Domain "${domain}" is not authorized in Firebase Console.`);
+        toast.error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains.`);
       } else {
-        console.error(error);
-        toast.error('Failed to sign in');
+        console.error('[AUTH ERROR]', error);
+        toast.error(error.message || 'Failed to sign in');
       }
     }
   };
@@ -2018,21 +2056,29 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       await signInWithEmailAndPassword(auth, email, pass);
       toast.success('Signed in successfully');
     } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || 'Failed to sign in');
+      console.error('[AUTH ERROR]', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        const domain = window.location.hostname;
+        toast.error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains.`);
+      } else {
+        toast.error(error.message || 'Failed to sign in');
+      }
       throw error;
     }
   };
 
   const signUpEmail = async (email: string, pass: string, name: string) => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-      // Profile creation is handled by the onAuthStateChanged listener
-      // but we can pre-set the name if needed. The listener will handle the Firestore part.
+      await createUserWithEmailAndPassword(auth, email, pass);
       toast.success('Account created successfully');
     } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || 'Failed to create account');
+      console.error('[AUTH ERROR]', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        const domain = window.location.hostname;
+        toast.error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains.`);
+      } else {
+        toast.error(error.message || 'Failed to create account');
+      }
       throw error;
     }
   };
