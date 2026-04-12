@@ -1730,35 +1730,56 @@ const VendorPortal = () => {
           <h2 className="text-4xl font-black text-gray-900">Vendor Dashboard</h2>
           <p className="text-gray-500 mt-2">Managing Miracle Bite's Catering Services</p>
         </div>
-        <div className="flex bg-gray-100 p-1.5 rounded-2xl flex-wrap">
-          <button 
-            onClick={() => setActiveTab('orders')}
-            className={cn(
-              "px-6 py-3 rounded-xl font-bold transition-all",
-              activeTab === 'orders' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            )}
-          >
-            Orders ({orders.filter(o => o.status !== 'delivered').length})
-          </button>
-          <button 
-            onClick={() => setActiveTab('menu')}
-            className={cn(
-              "px-6 py-3 rounded-xl font-bold transition-all",
-              activeTab === 'menu' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            )}
-          >
-            Menu Management
-          </button>
-          <button 
-            onClick={() => setActiveTab('settings')}
-            className={cn(
-              "px-6 py-3 rounded-xl font-bold transition-all",
-              activeTab === 'settings' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
-            )}
-          >
-            Settings
-          </button>
-        </div>
+          <div className="flex bg-gray-100 p-1.5 rounded-2xl flex-wrap gap-2">
+            <button 
+              onClick={() => setActiveTab('orders')}
+              className={cn(
+                "px-6 py-3 rounded-xl font-bold transition-all",
+                activeTab === 'orders' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              Orders ({orders.filter(o => o.status !== 'delivered').length})
+            </button>
+            <button 
+              onClick={() => setActiveTab('menu')}
+              className={cn(
+                "px-6 py-3 rounded-xl font-bold transition-all",
+                activeTab === 'menu' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              Menu Management
+            </button>
+            <button 
+              onClick={() => setActiveTab('settings')}
+              className={cn(
+                "px-6 py-3 rounded-xl font-bold transition-all",
+                activeTab === 'settings' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
+              )}
+            >
+              Settings
+            </button>
+            <button 
+              onClick={async () => {
+                const confirmed = window.confirm('This will add any missing default items and update existing ones. Continue?');
+                if (confirmed) {
+                  const { getDocs, query, collection, where } = await import('firebase/firestore');
+                  for (const item of INITIAL_MENU_ITEMS) {
+                    const q = query(collection(db, 'menuItems'), where('name', '==', item.name));
+                    const querySnapshot = await getDocs(q);
+                    if (!querySnapshot.empty) {
+                      await updateDoc(querySnapshot.docs[0].ref, { ...item, vendorId: VENDOR_ID, updatedAt: new Date().toISOString() });
+                    } else {
+                      await addDoc(collection(db, 'menuItems'), { ...item, vendorId: VENDOR_ID, createdAt: new Date().toISOString() });
+                    }
+                  }
+                  toast.success('Menu synced with defaults');
+                }
+              }}
+              className="px-6 py-3 rounded-xl font-bold text-gray-400 hover:text-orange-500 transition-all flex items-center gap-2"
+            >
+              <Plus className="h-4 w-4" /> Sync Defaults
+            </button>
+          </div>
       </div>
 
       {activeTab === 'orders' ? (

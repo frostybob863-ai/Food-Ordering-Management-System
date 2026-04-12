@@ -40,6 +40,38 @@ export const INITIAL_MENU_ITEMS: Partial<MenuItem>[] = [
     category: "Frozen Foods",
     imageUrl: "https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=800&q=80",
     available: true,
+  },
+  {
+    name: "Jollof Rice & Grilled Chicken",
+    description: "Authentic Ghanaian Jollof rice served with spicy grilled chicken and shito.",
+    price: 45.00,
+    category: "Main Meals",
+    imageUrl: "https://images.unsplash.com/photo-1604329760661-e71dc83f8f26?auto=format&fit=crop&w=800&q=80",
+    available: true,
+  },
+  {
+    name: "Kelewele",
+    description: "Spicy fried plantain cubes, a perfect side or snack.",
+    price: 15.00,
+    category: "Sides",
+    imageUrl: "https://images.unsplash.com/photo-1599487488170-d11ec9c172f0?auto=format&fit=crop&w=800&q=80",
+    available: true,
+  },
+  {
+    name: "Assorted Noodles",
+    description: "Stir-fry noodles with beef, chicken, and shrimp.",
+    price: 40.00,
+    category: "Main Meals",
+    imageUrl: "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80",
+    available: true,
+  },
+  {
+    name: "Sobolo",
+    description: "Refreshing hibiscus ginger drink (500ml).",
+    price: 10.00,
+    category: "Drinks",
+    imageUrl: "https://images.unsplash.com/photo-1556679343-c7306c1976bc?auto=format&fit=crop&w=800&q=80",
+    available: true,
   }
 ];
 
