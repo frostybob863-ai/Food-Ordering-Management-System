@@ -8,6 +8,7 @@ export interface UserProfile {
   role: UserRole;
   phoneNumber?: string;
   address?: string;
+  onboardingCompleted?: boolean;
   createdAt: string;
 }
 

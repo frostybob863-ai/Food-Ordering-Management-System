@@ -94,6 +94,10 @@ service cloud.firestore {
       );
     }
 
+    match /test/connection {
+      allow read: if true;
+    }
+
     match /menuItems/{itemId} {
       function isValidMenuItem(data) {
         return data.keys().hasAll(['name', 'price', 'vendorId', 'available']) &&

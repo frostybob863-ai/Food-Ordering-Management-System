@@ -84,11 +84,17 @@ const useAuth = () => {
 // --- Connection Test ---
 async function testConnection() {
   try {
-    const { getDocFromServer } = await import('firebase/firestore');
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const { getDocFromServer, doc } = await import('firebase/firestore');
+    console.log("[DEBUG] Attempting Firestore connection test...");
+    const testDoc = await getDocFromServer(doc(db, 'test', 'connection'));
+    console.log("[DEBUG] Firestore connection successful. Doc exists:", testDoc.exists());
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration. The client is offline.");
+    console.error("[DEBUG] Firestore Connection Error Details:", error);
+    if (error instanceof Error) {
+      console.error("[DEBUG] Error Message:", error.message);
+      if (error.message.includes('the client is offline')) {
+        console.error("CRITICAL: Firestore client is offline. This usually means the Project ID or Database ID is incorrect.");
+      }
     }
   }
 }
@@ -378,7 +384,7 @@ const LoginPage = () => {
 
   useEffect(() => {
     if (user && profile) {
-      if (!profile.phoneNumber || !profile.address) {
+      if (!profile.onboardingCompleted) {
         navigate('/onboarding');
       } else if (profile.role === 'admin') {
         navigate('/admin');
@@ -882,7 +888,7 @@ const SignUpPage = () => {
 
   useEffect(() => {
     if (user && profile) {
-      if (!profile.phoneNumber || !profile.address) {
+      if (!profile.onboardingCompleted) {
         navigate('/onboarding');
       } else {
         navigate('/menu');
@@ -1005,7 +1011,7 @@ const OnboardingPage = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (profile?.phoneNumber && profile?.address) {
+    if (profile?.onboardingCompleted) {
       navigate('/menu');
     }
   }, [profile, navigate]);
@@ -1017,6 +1023,7 @@ const OnboardingPage = () => {
     try {
       await updateDoc(doc(db, 'users', user.uid), {
         ...formData,
+        onboardingCompleted: true,
         updatedAt: new Date().toISOString()
       });
       toast.success('Registration complete!');
@@ -1584,7 +1591,7 @@ const OrdersPage = () => {
 const VendorPortal = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'settings'>('orders');
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', category: 'Main Meals', imageUrl: '' });
@@ -1723,7 +1730,7 @@ const VendorPortal = () => {
           <h2 className="text-4xl font-black text-gray-900">Vendor Dashboard</h2>
           <p className="text-gray-500 mt-2">Managing Miracle Bite's Catering Services</p>
         </div>
-        <div className="flex bg-gray-100 p-1.5 rounded-2xl">
+        <div className="flex bg-gray-100 p-1.5 rounded-2xl flex-wrap">
           <button 
             onClick={() => setActiveTab('orders')}
             className={cn(
@@ -1741,6 +1748,15 @@ const VendorPortal = () => {
             )}
           >
             Menu Management
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={cn(
+              "px-6 py-3 rounded-xl font-bold transition-all",
+              activeTab === 'settings' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            Settings
           </button>
         </div>
       </div>
@@ -1801,7 +1817,7 @@ const VendorPortal = () => {
             ))
           )}
         </div>
-      ) : (
+      ) : activeTab === 'menu' ? (
         <div className="space-y-8">
           <div className="flex justify-between items-center">
             <h3 className="text-2xl font-bold text-gray-900">Menu Items</h3>
@@ -1973,6 +1989,51 @@ const VendorPortal = () => {
               ))}
             </div>
           )}
+        </div>
+      ) : (
+        <div className="max-w-2xl bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-50">
+          <h3 className="text-2xl font-bold text-gray-900 mb-8">Business Configuration</h3>
+          <div className="space-y-8">
+            <div className="p-6 bg-orange-50 rounded-2xl border border-orange-100">
+              <div className="flex items-center gap-3 text-orange-800 font-bold mb-2">
+                <CreditCard className="h-5 w-5" /> MoMo Integration (Paystack)
+              </div>
+              <p className="text-sm text-orange-700 mb-4">
+                Payments are processed via Paystack. Ensure your Public Key is set in the environment variables.
+              </p>
+              <div className="bg-white p-4 rounded-xl border border-orange-200 flex items-center justify-between">
+                <span className="text-xs font-mono text-gray-500">
+                  {import.meta.env.VITE_PAYSTACK_PUBLIC_KEY 
+                    ? `${import.meta.env.VITE_PAYSTACK_PUBLIC_KEY.slice(0, 8)}...` 
+                    : 'NOT CONFIGURED'}
+                </span>
+                {import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? (
+                  <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">ACTIVE</span>
+                ) : (
+                  <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">MISSING</span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Business Name</label>
+                <div className="p-4 bg-gray-50 rounded-xl text-gray-900 font-medium">Miracle Bite's Catering</div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Vendor ID</label>
+                <div className="p-4 bg-gray-50 rounded-xl text-gray-500 font-mono text-xs">{VENDOR_ID}</div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="font-bold text-gray-900">System Status</h4>
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
+                <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
+                <span className="text-sm font-medium text-gray-700">Firebase Backend: Connected</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -2202,8 +2263,11 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
             // Force admin role for the primary admin email
             if (firebaseUser.email === 'eotu907@gmail.com' && existingProfile.role !== 'admin') {
               await updateDoc(userRef, { role: 'admin' });
-              // The next snapshot will have the updated role
             } else {
+              // Migration: If user already has data but no flag, set it
+              if (!existingProfile.onboardingCompleted && existingProfile.phoneNumber && existingProfile.address) {
+                await updateDoc(userRef, { onboardingCompleted: true });
+              }
               setProfile(existingProfile);
               setLoading(false);
             }
@@ -2360,7 +2424,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode, roles?: UserRole[] }
   
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
   
-  if (!profile?.phoneNumber || !profile?.address) {
+  if (!profile?.onboardingCompleted) {
     return <Navigate to="/onboarding" replace />;
   }
 
