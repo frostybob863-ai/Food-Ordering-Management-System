@@ -1591,7 +1591,7 @@ const OrdersPage = () => {
 const VendorPortal = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [activeTab, setActiveTab] = useState<'orders' | 'menu' | 'settings'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'menu'>('orders');
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', category: 'Main Meals', imageUrl: '' });
@@ -1750,15 +1750,6 @@ const VendorPortal = () => {
               Menu Management
             </button>
             <button 
-              onClick={() => setActiveTab('settings')}
-              className={cn(
-                "px-6 py-3 rounded-xl font-bold transition-all",
-                activeTab === 'settings' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
-              )}
-            >
-              Settings
-            </button>
-            <button 
               onClick={async () => {
                 const confirmed = window.confirm('This will add any missing default items and update existing ones. Continue?');
                 if (confirmed) {
@@ -1838,7 +1829,7 @@ const VendorPortal = () => {
             ))
           )}
         </div>
-      ) : activeTab === 'menu' ? (
+      ) : (
         <div className="space-y-8">
           <div className="flex justify-between items-center">
             <h3 className="text-2xl font-bold text-gray-900">Menu Items</h3>
@@ -2011,51 +2002,6 @@ const VendorPortal = () => {
             </div>
           )}
         </div>
-      ) : (
-        <div className="max-w-2xl bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-50">
-          <h3 className="text-2xl font-bold text-gray-900 mb-8">Business Configuration</h3>
-          <div className="space-y-8">
-            <div className="p-6 bg-orange-50 rounded-2xl border border-orange-100">
-              <div className="flex items-center gap-3 text-orange-800 font-bold mb-2">
-                <CreditCard className="h-5 w-5" /> MoMo Integration (Paystack)
-              </div>
-              <p className="text-sm text-orange-700 mb-4">
-                Payments are processed via Paystack. Ensure your Public Key is set in the environment variables.
-              </p>
-              <div className="bg-white p-4 rounded-xl border border-orange-200 flex items-center justify-between">
-                <span className="text-xs font-mono text-gray-500">
-                  {import.meta.env.VITE_PAYSTACK_PUBLIC_KEY 
-                    ? `${import.meta.env.VITE_PAYSTACK_PUBLIC_KEY.slice(0, 8)}...` 
-                    : 'NOT CONFIGURED'}
-                </span>
-                {import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? (
-                  <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">ACTIVE</span>
-                ) : (
-                  <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">MISSING</span>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Business Name</label>
-                <div className="p-4 bg-gray-50 rounded-xl text-gray-900 font-medium">Miracle Bite's Catering</div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Vendor ID</label>
-                <div className="p-4 bg-gray-50 rounded-xl text-gray-500 font-mono text-xs">{VENDOR_ID}</div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="font-bold text-gray-900">System Status</h4>
-              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
-                <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
-                <span className="text-sm font-medium text-gray-700">Firebase Backend: Connected</span>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );
@@ -2066,6 +2012,7 @@ const AdminPortal = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [stats, setStats] = useState({ totalOrders: 0, totalRevenue: 0 });
+  const [activeTab, setActiveTab] = useState<'users' | 'settings'>('users');
   const { profile, loading: authLoading } = useAuth();
 
   useEffect(() => {
@@ -2144,7 +2091,32 @@ const AdminPortal = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12">
-      <h2 className="text-4xl font-black text-gray-900 mb-12">System Administration</h2>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+        <div>
+          <h2 className="text-4xl font-black text-gray-900">System Administration</h2>
+          <p className="text-gray-500 mt-2">Manage users and system configuration</p>
+        </div>
+        <div className="flex bg-gray-100 p-1.5 rounded-2xl">
+          <button 
+            onClick={() => setActiveTab('users')}
+            className={cn(
+              "px-6 py-3 rounded-xl font-bold transition-all",
+              activeTab === 'users' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            User Management
+          </button>
+          <button 
+            onClick={() => setActiveTab('settings')}
+            className={cn(
+              "px-6 py-3 rounded-xl font-bold transition-all",
+              activeTab === 'settings' ? "bg-white text-orange-500 shadow-sm" : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            System Settings
+          </button>
+        </div>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
         <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-gray-50">
@@ -2161,97 +2133,145 @@ const AdminPortal = () => {
         </div>
       </div>
 
-      <div className="bg-white rounded-[2.5rem] shadow-2xl border border-gray-50 overflow-hidden">
-        <div className="px-8 py-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-xl font-bold text-gray-900">User Management</h3>
-            <p className="text-xs text-gray-500">Manage roles for {users.length} registered users</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-            <div className="relative flex-1 md:flex-none">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input 
-                type="text" 
-                placeholder="Search users..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-orange-500 outline-none w-full"
-              />
+      {activeTab === 'users' ? (
+        <div className="bg-white rounded-[2.5rem] shadow-2xl border border-gray-50 overflow-hidden">
+          <div className="px-8 py-6 border-b border-gray-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col gap-1">
+              <h3 className="text-xl font-bold text-gray-900">User Management</h3>
+              <p className="text-xs text-gray-500">Manage roles for {users.length} registered users</p>
             </div>
-            <select 
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value as any)}
-              className="px-4 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-            >
-              <option value="all">All Roles</option>
-              <option value="admin">Admins</option>
-              <option value="vendor">Vendors</option>
-              <option value="customer">Customers</option>
-            </select>
-            <button 
-              onClick={seedMenu}
-              className="bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-orange-600 transition-all"
-            >
-              Seed/Reset Menu
-            </button>
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="relative flex-1 md:flex-none">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input 
+                  type="text" 
+                  placeholder="Search users..."
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-4 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-orange-500 outline-none w-full"
+                />
+              </div>
+              <select 
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value as any)}
+                className="px-4 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+              >
+                <option value="all">All Roles</option>
+                <option value="admin">Admins</option>
+                <option value="vendor">Vendors</option>
+                <option value="customer">Customers</option>
+              </select>
+              <button 
+                onClick={seedMenu}
+                className="bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-orange-600 transition-all"
+              >
+                Seed/Reset Menu
+              </button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-widest">
+                <tr>
+                  <th className="px-8 py-4">User</th>
+                  <th className="px-8 py-4">Current Role</th>
+                  <th className="px-8 py-4">Joined</th>
+                  <th className="px-8 py-4">Assign Role</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {filteredUsers.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="px-8 py-12 text-center text-gray-400 font-medium">
+                      No users found matching your criteria
+                    </td>
+                  </tr>
+                ) : (
+                  filteredUsers.map(u => (
+                    <tr key={u.uid} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-8 py-6">
+                      <div className="flex items-center gap-3">
+                        <div className="bg-orange-100 p-2 rounded-lg"><UserIcon className="h-5 w-5 text-orange-500" /></div>
+                        <div>
+                          <p className="font-bold text-gray-900">{u.displayName}</p>
+                          <p className="text-sm text-gray-500">{u.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-6">
+                      <span className={cn(
+                        "px-3 py-1 rounded-full text-xs font-bold uppercase",
+                        u.role === 'admin' ? "bg-purple-100 text-purple-700" :
+                        u.role === 'vendor' ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"
+                      )}>
+                        {u.role}
+                      </span>
+                    </td>
+                    <td className="px-8 py-6 text-sm text-gray-500">{new Date(u.createdAt).toLocaleDateString()}</td>
+                    <td className="px-8 py-6">
+                      <select 
+                        value={u.role}
+                        onChange={(e) => updateUserRole(u.uid, e.target.value as UserRole)}
+                        disabled={u.email === 'eotu907@gmail.com'}
+                        className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block w-full p-2.5"
+                      >
+                        <option value="customer">Customer</option>
+                        <option value="vendor">Vendor</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                  </tr>
+                )))}
+              </tbody>
+            </table>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 text-gray-500 text-xs font-bold uppercase tracking-widest">
-              <tr>
-                <th className="px-8 py-4">User</th>
-                <th className="px-8 py-4">Current Role</th>
-                <th className="px-8 py-4">Joined</th>
-                <th className="px-8 py-4">Assign Role</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filteredUsers.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-8 py-12 text-center text-gray-400 font-medium">
-                    No users found matching your criteria
-                  </td>
-                </tr>
-              ) : (
-                filteredUsers.map(u => (
-                  <tr key={u.uid} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-orange-100 p-2 rounded-lg"><UserIcon className="h-5 w-5 text-orange-500" /></div>
-                      <div>
-                        <p className="font-bold text-gray-900">{u.displayName}</p>
-                        <p className="text-sm text-gray-500">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className={cn(
-                      "px-3 py-1 rounded-full text-xs font-bold uppercase",
-                      u.role === 'admin' ? "bg-purple-100 text-purple-700" :
-                      u.role === 'vendor' ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-700"
-                    )}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-8 py-6 text-sm text-gray-500">{new Date(u.createdAt).toLocaleDateString()}</td>
-                  <td className="px-8 py-6">
-                    <select 
-                      value={u.role}
-                      onChange={(e) => updateUserRole(u.uid, e.target.value as UserRole)}
-                      className="bg-gray-50 border border-gray-200 text-gray-900 text-sm rounded-lg focus:ring-orange-500 focus:border-orange-500 block w-full p-2.5"
-                    >
-                      <option value="customer">Customer</option>
-                      <option value="vendor">Vendor</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </td>
-                </tr>
-              )))}
-            </tbody>
-          </table>
+      ) : (
+        <div className="max-w-2xl bg-white p-10 rounded-[2.5rem] shadow-xl border border-gray-50">
+          <h3 className="text-2xl font-bold text-gray-900 mb-8">System Configuration</h3>
+          <div className="space-y-8">
+            <div className="p-6 bg-orange-50 rounded-2xl border border-orange-100">
+              <div className="flex items-center gap-3 text-orange-800 font-bold mb-2">
+                <CreditCard className="h-5 w-5" /> MoMo Integration (Paystack)
+              </div>
+              <p className="text-sm text-orange-700 mb-4">
+                Payments are processed via Paystack. Ensure your Public Key is set in the environment variables.
+              </p>
+              <div className="bg-white p-4 rounded-xl border border-orange-200 flex items-center justify-between">
+                <span className="text-xs font-mono text-gray-500">
+                  {import.meta.env.VITE_PAYSTACK_PUBLIC_KEY 
+                    ? `${import.meta.env.VITE_PAYSTACK_PUBLIC_KEY.slice(0, 8)}...` 
+                    : 'NOT CONFIGURED'}
+                </span>
+                {import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? (
+                  <span className="text-[10px] bg-green-100 text-green-700 px-2 py-1 rounded-full font-bold">ACTIVE</span>
+                ) : (
+                  <span className="text-[10px] bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold">MISSING</span>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Business Name</label>
+                <div className="p-4 bg-gray-50 rounded-xl text-gray-900 font-medium">Miracle Bite's Catering</div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Vendor ID</label>
+                <div className="p-4 bg-gray-50 rounded-xl text-gray-500 font-mono text-xs">{VENDOR_ID}</div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="font-bold text-gray-900">System Status</h4>
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
+                <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
+                <span className="text-sm font-medium text-gray-700">Firebase Backend: Connected</span>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
