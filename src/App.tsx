@@ -15,7 +15,9 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   confirmPasswordReset,
-  verifyPasswordResetCode
+  verifyPasswordResetCode,
+  setPersistence,
+  browserSessionPersistence
 } from 'firebase/auth';
 import { 
   doc, 
@@ -42,6 +44,7 @@ import {
   Settings, 
   LogOut, 
   Plus, 
+  Minus,
   Trash2, 
   CheckCircle, 
   Clock, 
@@ -55,7 +58,9 @@ import {
   MapPin,
   Search,
   Camera,
-  Upload
+  Upload,
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'react-hot-toast';
@@ -66,6 +71,7 @@ interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
   loading: boolean;
+  isConnected: boolean;
   signIn: () => Promise<void>;
   signInEmail: (email: string, pass: string) => Promise<void>;
   signUpEmail: (email: string, pass: string, name: string) => Promise<void>;
@@ -80,25 +86,6 @@ const useAuth = () => {
   if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
-
-// --- Connection Test ---
-async function testConnection() {
-  try {
-    const { getDocFromServer, doc } = await import('firebase/firestore');
-    console.log("[DEBUG] Attempting Firestore connection test...");
-    const testDoc = await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log("[DEBUG] Firestore connection successful. Doc exists:", testDoc.exists());
-  } catch (error) {
-    console.error("[DEBUG] Firestore Connection Error Details:", error);
-    if (error instanceof Error) {
-      console.error("[DEBUG] Error Message:", error.message);
-      if (error.message.includes('the client is offline')) {
-        console.error("CRITICAL: Firestore client is offline. This usually means the Project ID or Database ID is incorrect.");
-      }
-    }
-  }
-}
-testConnection();
 
 // --- Error Handling ---
 enum OperationType {
@@ -1093,7 +1080,8 @@ const MenuPage = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<{item: MenuItem, quantity: number}[]>([]);
   const [loading, setLoading] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'momo'>('momo');
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'momo'>('cash');
+  const [deliveryMethod, setDeliveryMethod] = useState<'delivery' | 'pickup'>('pickup');
   const [isProcessing, setIsProcessing] = useState(false);
   const { user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -1146,6 +1134,20 @@ const MenuPage = () => {
     toast.success(`Added ${item.name} to cart`);
   };
 
+  const updateQuantity = (itemId: string, delta: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.item.id === itemId) {
+        return { ...item, quantity: Math.max(1, item.quantity + delta) };
+      }
+      return item;
+    }));
+  };
+
+  const removeFromCart = (itemId: string) => {
+    setCart(prev => prev.filter(item => item.item.id !== itemId));
+    toast.error('Item removed from cart');
+  };
+
   const placeOrder = async (isPaid: boolean = false) => {
     if (!user) {
       navigate('/login');
@@ -1156,23 +1158,23 @@ const MenuPage = () => {
 
     setIsProcessing(true);
     try {
-      const orderData = {
-        customerId: user.uid,
-        vendorId: VENDOR_ID,
-        items: cart.map(i => ({
-          menuItemId: i.item.id,
-          name: i.item.name,
-          price: i.item.price,
-          quantity: i.quantity
-        })),
-        totalAmount,
-        status: 'pending',
-        deliveryMethod: 'delivery',
-        paymentMethod,
-        paymentStatus: isPaid ? 'paid' : 'pending',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
+        const orderData = {
+          customerId: user.uid,
+          vendorId: VENDOR_ID,
+          items: cart.map(i => ({
+            menuItemId: i.item.id,
+            name: i.item.name,
+            price: i.item.price,
+            quantity: i.quantity
+          })),
+          totalAmount,
+          status: 'pending',
+          deliveryMethod,
+          paymentMethod,
+          paymentStatus: (isPaid || paymentMethod === 'cash') ? 'paid' : 'pending',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
 
       await addDoc(collection(db, 'orders'), orderData);
       toast.success(isPaid ? 'Payment successful & Order placed!' : 'Order placed successfully!');
@@ -1301,12 +1303,38 @@ const MenuPage = () => {
               <>
                 <div className="space-y-4 mb-8 max-h-96 overflow-y-auto pr-2">
                   {cart.map((item, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-gray-50 p-4 rounded-2xl">
-                      <div>
-                        <p className="font-bold text-gray-900">{item.item.name}</p>
-                        <p className="text-sm text-gray-500">x{item.quantity}</p>
+                    <div key={idx} className="flex flex-col bg-gray-50 p-4 rounded-2xl gap-3">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-bold text-gray-900 leading-tight">{item.item.name}</p>
+                          <p className="text-xs text-gray-500 mt-1">GH₵{(item.item.price ?? 0).toFixed(2)} each</p>
+                        </div>
+                        <button 
+                          onClick={() => removeFromCart(item.item.id)}
+                          className="text-gray-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
                       </div>
-                      <p className="font-bold text-gray-900">GH₵{((item.item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}</p>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-xl border border-gray-100">
+                          <button 
+                            onClick={() => updateQuantity(item.item.id, -1)}
+                            className="text-gray-500 hover:text-orange-500 disabled:opacity-30"
+                            disabled={item.quantity <= 1}
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          <span className="font-bold text-gray-900 min-w-[20px] text-center">{item.quantity}</span>
+                          <button 
+                            onClick={() => updateQuantity(item.item.id, 1)}
+                            className="text-gray-500 hover:text-orange-500"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+                        <p className="font-black text-gray-900">GH₵{((item.item.price ?? 0) * (item.quantity ?? 0)).toFixed(2)}</p>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1323,33 +1351,65 @@ const MenuPage = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        onClick={() => setPaymentMethod('momo')}
-                        className={cn(
-                          "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
-                          paymentMethod === 'momo' 
-                            ? "border-orange-500 bg-orange-50 text-orange-600" 
-                            : "border-gray-100 text-gray-400 hover:border-gray-200"
-                        )}
-                      >
-                        <CreditCard className="h-4 w-4" />
-                        <span className="text-[9px] font-black uppercase">Mobile Money</span>
-                      </button>
-                      <button
-                        onClick={() => setPaymentMethod('cash')}
-                        className={cn(
-                          "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
-                          paymentMethod === 'cash' 
-                            ? "border-orange-500 bg-orange-50 text-orange-600" 
-                            : "border-gray-100 text-gray-400 hover:border-gray-200"
-                        )}
-                      >
-                        <Utensils className="h-4 w-4" />
-                        <span className="text-[9px] font-black uppercase">Cash</span>
-                      </button>
+                  <div className="space-y-6">
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Order Method</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setDeliveryMethod('delivery')}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                            deliveryMethod === 'delivery' 
+                              ? "border-orange-500 bg-orange-50 text-orange-600" 
+                              : "border-gray-100 text-gray-400 hover:border-gray-200"
+                          )}
+                        >
+                          <Clock className="h-4 w-4" />
+                          <span className="text-[9px] font-black uppercase">Delivery</span>
+                        </button>
+                        <button
+                          onClick={() => setDeliveryMethod('pickup')}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                            deliveryMethod === 'pickup' 
+                              ? "border-orange-500 bg-orange-50 text-orange-600" 
+                              : "border-gray-100 text-gray-400 hover:border-gray-200"
+                          )}
+                        >
+                          <Utensils className="h-4 w-4" />
+                          <span className="text-[9px] font-black uppercase">Pick up</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Payment Method</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => setPaymentMethod('momo')}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                            paymentMethod === 'momo' 
+                              ? "border-orange-500 bg-orange-50 text-orange-600" 
+                              : "border-gray-100 text-gray-400 hover:border-gray-200"
+                          )}
+                        >
+                          <CreditCard className="h-4 w-4" />
+                          <span className="text-[9px] font-black uppercase">MoMo</span>
+                        </button>
+                        <button
+                          onClick={() => setPaymentMethod('cash')}
+                          className={cn(
+                            "flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all",
+                            paymentMethod === 'cash' 
+                              ? "border-orange-500 bg-orange-50 text-orange-600" 
+                              : "border-gray-100 text-gray-400 hover:border-gray-200"
+                          )}
+                        >
+                          <ShoppingBag className="h-4 w-4" />
+                          <span className="text-[9px] font-black uppercase">Cash</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
                   
@@ -2013,7 +2073,7 @@ const AdminPortal = () => {
   const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
   const [stats, setStats] = useState({ totalOrders: 0, totalRevenue: 0 });
   const [activeTab, setActiveTab] = useState<'users' | 'settings'>('users');
-  const { profile, loading: authLoading } = useAuth();
+  const { profile, loading: authLoading, isConnected } = useAuth();
 
   useEffect(() => {
     if (!profile || profile.role !== 'admin' || authLoading) return;
@@ -2265,8 +2325,13 @@ const AdminPortal = () => {
             <div className="space-y-4">
               <h4 className="font-bold text-gray-900">System Status</h4>
               <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
-                <div className="h-3 w-3 rounded-full bg-green-500 animate-pulse"></div>
-                <span className="text-sm font-medium text-gray-700">Firebase Backend: Connected</span>
+                <div className={cn(
+                  "h-3 w-3 rounded-full animate-pulse",
+                  isConnected ? "bg-green-500" : "bg-red-500"
+                )}></div>
+                <span className="text-sm font-medium text-gray-700">
+                  Firebase Backend: {isConnected ? 'Connected' : 'Offline'}
+                </span>
               </div>
             </div>
           </div>
@@ -2281,6 +2346,28 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+
+  // --- Connection Test Effect ---
+  useEffect(() => {
+    async function runTest() {
+      try {
+        const { getDocFromServer, doc } = await import('firebase/firestore');
+        console.log("[DEBUG] Running internal connectivity check...");
+        const testDoc = await getDocFromServer(doc(db, 'test', 'connection'));
+        console.log("[DEBUG] Connection Verified:", testDoc.exists());
+        setIsConnected(true);
+      } catch (error: any) {
+        setIsConnected(false);
+        // We only show a toast if it's a persistent offline state, giving it some buffer
+        if (error.message?.includes('the client is offline')) {
+          console.error("CONNECTION ERROR: Firebase Firestore is unreachable. This is almost always due to an invalid Project ID or Database ID.");
+          console.log("[DEBUG] Current App Project ID:", db.app.options.projectId);
+        }
+      }
+    }
+    runTest();
+  }, []);
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | null = null;
@@ -2360,12 +2447,16 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       await signInWithPopup(auth, provider);
       toast.success('Signed in successfully');
     } catch (error: any) {
+      console.error('[AUTH ERROR] Complete Error Object:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       if (error.code === 'auth/cancelled-popup-request' || error.code === 'auth/popup-closed-by-user') {
         console.log('Sign-in popup closed or cancelled');
       } else if (error.code === 'auth/unauthorized-domain') {
         const domain = window.location.hostname;
         console.error(`[AUTH ERROR] Domain "${domain}" is not authorized in Firebase Console.`);
         toast.error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains.`);
+      } else if (error.code === 'auth/internal-error') {
+        console.error('[AUTH ERROR] Internal Error. This often relates to configuration or network issues.', error);
+        toast.error('Authentication internal error. Please refresh and try again.');
       } else {
         console.error('[AUTH ERROR]', error);
         toast.error(error.message || 'Failed to sign in');
@@ -2378,7 +2469,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       await signInWithEmailAndPassword(auth, email, pass);
       toast.success('Signed in successfully');
     } catch (error: any) {
-      console.error('[AUTH ERROR]', error);
+      console.error('[AUTH ERROR] email signin failed', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       if (error.code === 'auth/unauthorized-domain') {
         const domain = window.location.hostname;
         toast.error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains.`);
@@ -2394,7 +2485,7 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
       await createUserWithEmailAndPassword(auth, email, pass);
       toast.success('Account created successfully');
     } catch (error: any) {
-      console.error('[AUTH ERROR]', error);
+      console.error('[AUTH ERROR] email signup failed', JSON.stringify(error, Object.getOwnPropertyNames(error)));
       if (error.code === 'auth/unauthorized-domain') {
         const domain = window.location.hostname;
         toast.error(`Domain not authorized. Please add "${domain}" to your Firebase Authorized Domains.`);
@@ -2451,8 +2542,37 @@ const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   };
 
   return (
-    <AuthContext.Provider value={{ user, profile, loading, signIn, signInEmail, signUpEmail, resetPassword, logout }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      profile, 
+      loading: loading || (!isConnected && !user), 
+      isConnected,
+      signIn, 
+      signInEmail, 
+      signUpEmail, 
+      resetPassword, 
+      logout 
+    }}>
       {children}
+      {!isConnected && (
+        <div className="fixed bottom-4 left-4 right-4 z-[9999] md:left-auto md:w-96">
+          <div className="bg-red-500 text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between gap-4 animate-in fade-in slide-in-from-bottom-5">
+            <div className="flex items-center gap-3">
+              <Zap className="h-5 w-5 animate-pulse" />
+              <div>
+                <p className="font-bold text-sm">Database Offline</p>
+                <p className="text-[10px] opacity-90">Verify your Project ID in Settings menu (gear icon).</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-white/20 hover:bg-white/30 p-2 rounded-lg transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </AuthContext.Provider>
   );
 };
